@@ -18,7 +18,7 @@ connectDB();
 app.set("trust proxy", 1);
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -32,10 +32,10 @@ app.use(
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-      secure: false,
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7
+      maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   })
 );
@@ -83,7 +83,9 @@ app.get("/auth/session", async (req, res) => {
     return res.status(401).json({ error: "Session expired" });
   }
   try {
-    const user = await User.findById(req.session.userId).select("_id email name");
+    const user = await User.findById(req.session.userId).select(
+      "_id email name"
+    );
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
