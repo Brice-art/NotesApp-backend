@@ -18,7 +18,7 @@ connectDB();
 app.set("trust proxy", 1);
 app.use(
   cors({
-    origin: process.env.CLIENT_URL,
+    origin: "https://notes-app-frontend-five-rho.vercel.app",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -32,8 +32,8 @@ app.use(
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-      secure: true,
-      sameSite: "none",
+      secure: true,           // required for HTTPS
+      sameSite: "none",       // required for cross-site cookies
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 7,
     },
