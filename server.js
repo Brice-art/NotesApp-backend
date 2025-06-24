@@ -65,17 +65,12 @@ function requireAuth(req, res, next) {
 // Login user
 app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: "Invalid credentials" });
-    req.session.userId = user._id; // Set session
-    req.session.save(); // Save session
-    res.json(user);
-  } catch (err) {
-    res.status(500).json({ error: "Login failed" });
-  }
+  const user = await User.findOne({ email });
+  if (!user) return res.status(401).json({ error: "Invalid credentials" });
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) return res.status(401).json({ error: "Invalid credentials" });
+  req.session.userId = user._id; // <-- Set userId in session
+  res.json(user);
 });
 
 // Check session endpoint
