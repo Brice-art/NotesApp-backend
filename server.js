@@ -32,11 +32,12 @@ app.use(
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-      secure: true,           // required for HTTPS
-      sameSite: "none",       // required for cross-site cookies
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
-    },
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  httpOnly: true,
+  maxAge: 1000 * 60 * 60 * 24 * 7,
+}
+
   })
 );
 
@@ -70,7 +71,13 @@ app.post("/auth/login", async (req, res) => {
   const match = await bcrypt.compare(password, user.password);
   if (!match) return res.status(401).json({ error: "Invalid credentials" });
   req.session.userId = user._id; // <-- Set userId in session
-  
+  req.session.save(err => {
+  if (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Could not save session" });
+  }
+  res.json({ message: "Login successful" });
+});
   res.json(user);
 });
 
