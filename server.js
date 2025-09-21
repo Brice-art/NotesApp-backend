@@ -70,6 +70,7 @@ app.post("/auth/login", async (req, res) => {
   const match = await bcrypt.compare(password, user.password);
   if (!match) return res.status(401).json({ error: "Invalid credentials" });
   req.session.userId = user._id; // <-- Set userId in session
+  
   res.json(user);
 });
 
@@ -94,9 +95,8 @@ app.get("/auth/session", async (req, res) => {
 // Create new note
 app.post("/notes/:userId", requireAuth, async (req, res) => {
   const { title, content } = req.body;
-  const { userId } = req.params;
-  if (req.session.userId !== userId)
-    return res.status(403).json({ error: "Forbidden" });
+  const userId = req.session.userId;
+  
   try {
     const note = await Note.create({ user: userId, title, content });
     res.status(201).json(note);
@@ -108,7 +108,8 @@ app.post("/notes/:userId", requireAuth, async (req, res) => {
 // Get notes
 app.get("/notes/:userId", requireAuth, async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = req.session.userId;
+    
     const notes = await Note.find({ user: userId }).sort({ createdAt: -1 });
     if (!notes) {
       return res.status(404).json({ message: "No notes found" });
@@ -123,12 +124,10 @@ app.get("/notes/:userId", requireAuth, async (req, res) => {
 // Get a specific note
 app.get("/notes/:userId/:noteId", requireAuth, async (req, res) => {
   try {
-    const { userId, noteId } = req.params;
+    const { noteId } = req.params;
+    const userId = req.session.userId;
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    const note = user.notes.id(noteId);
+    const note = await Note.findOne({ _id: noteId, user: userId });
     if (!note) return res.status(404).json({ message: "Note not found" });
 
     res.status(200).json(note);
@@ -139,17 +138,20 @@ app.get("/notes/:userId/:noteId", requireAuth, async (req, res) => {
 
 // Update notes
 app.put("/notes/:userId/:noteId", requireAuth, async (req, res) => {
-  const { userId, noteId } = req.params;
+  const { noteId } = req.params;
   const { title, content, color } = req.body;
-  if (req.session.userId !== userId)
-    return res.status(403).json({ error: "Forbidden" });
+
+  const userId = req.session.userId;
 
   try {
-    await Note.updateOne(
-      { _id: noteId },
-      { $set: { title: title, content: content, color: color } }
+    const note = await Note.findOneAndUpdate(
+      { _id: noteId, user: userId },
+      { title, content, color },
+      { new: true }
     );
-    res.status(200).json({ message: "Note updated successfully" });
+    if (!note) return res.status(404).json({ error: "Note not found" });
+
+    res.status(200).json({ message: "Note updated successfully", note });
   } catch (err) {
     return res.status(400).json({ error: "Could not update note" });
   }
@@ -157,11 +159,13 @@ app.put("/notes/:userId/:noteId", requireAuth, async (req, res) => {
 
 // Delete note
 app.delete("/notes/:userId/:noteId", requireAuth, async (req, res) => {
-  const { userId, noteId } = req.params;
-  if (req.session.userId !== userId)
-    return res.status(403).json({ error: "Forbidden" });
+  const { noteId } = req.params;
+  const userId = req.session.userId;
+
   try {
-    await Note.deleteOne({ _id: noteId });
+    const deleted = await Note.deleteOne({ _id: noteId, user: userId });
+    if (!deleted.deletedCount) return res.status(404).json({ error: "Note not found" });
+
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: "Could not delete note" });
