@@ -47,8 +47,8 @@ app.use(session({
     touchAfter: 24 * 3600
   }),
   cookie: {
-    secure: process.env.NODE_ENV === "production", // ✅ Important
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // ✅ Important for cross-origin
+    secure: process.env.NODE_ENV === "production", 
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", 
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7
   }
