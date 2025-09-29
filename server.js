@@ -51,8 +51,9 @@ app.use(cookieSession({
   keys: [process.env.SESSION_SECRET || "secret"],
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+  secure: true, // Always true for Railway (HTTPS)
+  sameSite: "none", // Required for cross-origin cookies
+  domain: undefined
 }));
 
 // Auth Middleware
