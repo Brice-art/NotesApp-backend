@@ -1,70 +1,71 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const connectDB = require("./config/db");
+const cookieSession = require("cookie-session");
+const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
 const User = require("./models/User");
 const Note = require("./models/Note");
-const bcrypt = require("bcrypt");
-const session = require("express-session");
-const MongoStore = require("connect-mongo");
 
 const app = express();
 
-// Connect Database
+// MongoDB Connection
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("✅ MongoDB connected");
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:", err.message);
+    process.exit(1);
+  }
+};
+
 connectDB();
 
 // Middleware
-// CORS configuration
+app.use(express.json());
+
+// CORS
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'https://notes-app-frontend-five-rho.vercel.app'
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://notes-app-frontend-five-rho.vercel.app"
 ];
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      return callback(new Error('CORS not allowed'), false);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
-}));  
-
-app.use(express.json());
-
-// Session setup
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({ 
-    mongoUrl: process.env.MONGO_URI,
-    touchAfter: 24 * 3600
-  }),
-  cookie: {
-    secure: process.env.NODE_ENV === "production", 
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", 
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 7
-  }
 }));
 
-// Auth middleware
+// Cookie Session
+app.use(cookieSession({
+  name: "session",
+  keys: [process.env.SESSION_SECRET || "secret"],
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+}));
+
+// Auth Middleware
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
-    return res.status(401).json({ error: "Please log in" });
+    return res.status(401).json({ error: "Authentication required" });
   }
   next();
 };
 
-// =============== AUTH ROUTES ===============
+// ============= AUTH ROUTES =============
 
-// Register
+// Signup
 app.post("/auth/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -75,23 +76,23 @@ app.post("/auth/signup", async (req, res) => {
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ 
-      name, 
-      email, 
-      password: hashedPassword 
-    });
+    const user = await User.create({ name, email, password: hashedPassword });
     
-    req.session.userId = user._id;
+    req.session.userId = user._id.toString();
+    
+    console.log('✅ Signup successful:', email);
+    
     res.status(201).json({
       message: "User created successfully",
       user: { id: user._id, name: user.name, email: user.email }
     });
   } catch (error) {
+    console.error('❌ Signup error:', error);
     res.status(500).json({ error: "Signup failed" });
   }
 });
 
-// Login user
+// Login
 app.post("/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -106,54 +107,53 @@ app.post("/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
     
-    req.session.userId = user._id;
+    req.session.userId = user._id.toString();
     
-    // Add this logging
-    console.log('Login successful for:', email);
-    console.log('Session ID:', req.session.id);
-    console.log('User ID set in session:', req.session.userId);
+    console.log('✅ Login successful:', email);
+    console.log('✅ Session userId:', req.session.userId);
     
-    req.session.save((err) => {
-      if (err) {
-        console.error('Session save error:', err);
-        return res.status(500).json({ error: "Could not save session" });
-      }
-      
-      console.log('Session saved successfully');
-      res.json({
-        message: "Login successful",
-        user: { id: user._id, name: user.name, email: user.email }
-      });
+    res.json({
+      message: "Login successful",
+      user: { id: user._id, name: user.name, email: user.email }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
     res.status(500).json({ error: "Login failed" });
   }
 });
+
 // Logout
 app.post("/auth/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.json({ message: "Logged out successfully" });
-  });
+  req.session = null;
+  res.json({ message: "Logged out successfully" });
 });
 
-// Check session
+// Check Session
 app.get("/auth/session", async (req, res) => {
   try {
-    if (!req.session.userId) {
+    console.log('🔍 Session check - userId:', req.session?.userId);
+    
+    if (!req.session || !req.session.userId) {
       return res.status(401).json({ error: "No active session" });
     }
     
     const user = await User.findById(req.session.userId).select("-password");
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    console.log('✅ Session valid for:', user.email);
+    
     res.json({
       user: { id: user._id, name: user.name, email: user.email }
     });
   } catch (error) {
+    console.error('❌ Session check error:', error);
     res.status(500).json({ error: "Session check failed" });
   }
 });
 
-// =============== NOTES ROUTES ===============
+// ============= NOTES ROUTES =============
 
 // Get all notes
 app.get("/notes", requireAuth, async (req, res) => {
@@ -177,24 +177,8 @@ app.get("/notes", requireAuth, async (req, res) => {
     const notes = await Note.find(query).sort({ isPinned: -1, createdAt: -1 });
     res.json({ notes });
   } catch (error) {
+    console.error('❌ Get notes error:', error);
     res.status(500).json({ error: "Failed to get notes" });
-  }
-});
-
-// Get single note
-app.get("/notes/:noteId", requireAuth, async (req, res) => {
-  try {
-    const { noteId } = req.params;
-    const userId = req.session.userId;
-    
-    const note = await Note.findOne({ _id: noteId, user: userId });
-    if (!note) {
-      return res.status(404).json({ error: "Note not found" });
-    }
-    
-    res.json({ note });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to get note" });
   }
 });
 
@@ -204,19 +188,14 @@ app.post("/notes", requireAuth, async (req, res) => {
     const { title, content = "", color = "#ffffff", category = "General" } = req.body;
     const userId = req.session.userId;
     
-    const note = await Note.create({
-      user: userId,
-      title,
-      content,
-      color,
-      category
-    });
+    const note = await Note.create({ user: userId, title, content, color, category });
     
     res.status(201).json({
       message: "Note created successfully",
       note
     });
   } catch (error) {
+    console.error('❌ Create note error:', error);
     res.status(500).json({ error: "Failed to create note" });
   }
 });
@@ -237,7 +216,7 @@ app.put("/notes/:noteId", requireAuth, async (req, res) => {
     if (isFavorite !== undefined) updateData.isFavorite = isFavorite;
     if (isArchived !== undefined) {
       updateData.isArchived = isArchived;
-      if (isArchived) updateData.isPinned = false; // Can't pin archived notes
+      if (isArchived) updateData.isPinned = false;
     }
     
     const note = await Note.findOneAndUpdate(
@@ -250,11 +229,9 @@ app.put("/notes/:noteId", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Note not found" });
     }
     
-    res.json({
-      message: "Note updated successfully",
-      note
-    });
+    res.json({ message: "Note updated successfully", note });
   } catch (error) {
+    console.error('❌ Update note error:', error);
     res.status(500).json({ error: "Failed to update note" });
   }
 });
@@ -273,6 +250,7 @@ app.delete("/notes/:noteId", requireAuth, async (req, res) => {
     
     res.json({ message: "Note deleted successfully" });
   } catch (error) {
+    console.error('❌ Delete note error:', error);
     res.status(500).json({ error: "Failed to delete note" });
   }
 });
@@ -296,11 +274,12 @@ app.patch("/notes/:noteId/pin", requireAuth, async (req, res) => {
       note
     });
   } catch (error) {
+    console.error('❌ Pin note error:', error);
     res.status(500).json({ error: "Failed to pin note" });
   }
 });
 
-// Archive/Unarchive note
+// Archive note
 app.patch("/notes/:noteId/archive", requireAuth, async (req, res) => {
   try {
     const { noteId } = req.params;
@@ -313,7 +292,7 @@ app.patch("/notes/:noteId/archive", requireAuth, async (req, res) => {
     }
     
     note.isArchived = archive;
-    if (archive) note.isPinned = false; // Can't pin archived notes
+    if (archive) note.isPinned = false;
     await note.save();
     
     res.json({
@@ -321,6 +300,7 @@ app.patch("/notes/:noteId/archive", requireAuth, async (req, res) => {
       note
     });
   } catch (error) {
+    console.error('❌ Archive note error:', error);
     res.status(500).json({ error: "Failed to archive note" });
   }
 });
@@ -332,6 +312,7 @@ app.get("/categories", requireAuth, async (req, res) => {
     const categories = await Note.distinct("category", { user: userId });
     res.json({ categories });
   } catch (error) {
+    console.error('❌ Get categories error:', error);
     res.status(500).json({ error: "Failed to get categories" });
   }
 });
@@ -340,16 +321,13 @@ app.get("/categories", requireAuth, async (req, res) => {
 app.get("/", (req, res) => {
   res.json({ 
     message: "NotesApp API is running",
-    endpoints: {
-      auth: ["POST /auth/signup", "POST /auth/login", "POST /auth/logout", "GET /auth/session"],
-      notes: ["GET /notes", "POST /notes", "PUT /notes/:id", "DELETE /notes/:id"],
-      actions: ["PATCH /notes/:id/pin", "PATCH /notes/:id/archive"]
-    }
+    version: "2.0.0"
   });
 });
 
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
