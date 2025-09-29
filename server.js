@@ -26,35 +26,27 @@ connectDB();
 app.use(express.json());
 
 // CORS
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://notes-app-frontend-five-rho.vercel.app"
-];
-
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+  origin: [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://notes-app-frontend-five-rho.vercel.app"
+  ],
+  credentials: true
 }));
 
+
+app.set('trust proxy', 1); // Trust first proxy (needed for secure cookies on platforms like Railway
 // Cookie Session
 app.use(cookieSession({
   name: "session",
   keys: [process.env.SESSION_SECRET || "secret"],
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   httpOnly: true,
-  secure: true, // Always true for Railway (HTTPS)
-  sameSite: "none", // Required for cross-origin cookies
-  domain: undefined
+  secure: process.env.NODE_ENV === "production", 
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
 }));
+app.set('trust proxy', 1); // Trust first proxy (needed for secure cookies on platforms like Railway
 
 // Auth Middleware
 const requireAuth = (req, res, next) => {
