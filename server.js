@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const cookieSession = require("cookie-session");
 const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
 const MongoStore = require("connect-mongo");
 const User = require("./models/User");
 const Note = require("./models/Note");
@@ -37,8 +38,8 @@ app.use(cors({
 
 
 app.set('trust proxy', 1); // Trust first proxy (needed for secure cookies on platforms like Railway
+
 // Cookie Session
-// Session middleware
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "supersecret",
@@ -56,8 +57,6 @@ app.use(
     },
   })
 );
-
-app.set('trust proxy', 1); // Trust first proxy (needed for secure cookies on platforms like Railway
 
 // Add this middleware RIGHT AFTER cookie-session
 app.use((req, res, next) => {
