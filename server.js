@@ -48,6 +48,16 @@ app.use(cookieSession({
 }));
 app.set('trust proxy', 1); // Trust first proxy (needed for secure cookies on platforms like Railway
 
+// Add this middleware RIGHT AFTER cookie-session
+app.use((req, res, next) => {
+  console.log('📨 Incoming request to:', req.path);
+  console.log('🍪 Cookie header:', req.headers.cookie);
+  console.log('📦 Session object:', req.session);
+  console.log('👤 Session userId:', req.session?.userId);
+  console.log('---');
+  next();
+});
+
 // Auth Middleware
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
@@ -100,10 +110,11 @@ app.post("/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
     
-    req.session.userId = user._id.toString();
+    // Set the session - this marks it as modified
+    req.session = { userId: user._id.toString() }; // ⬅️ Changed this line
     
     console.log('✅ Login successful:', email);
-    console.log('✅ Session userId:', req.session.userId);
+    console.log('✅ Session after login:', req.session);
     
     res.json({
       message: "Login successful",
