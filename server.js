@@ -46,6 +46,7 @@ app.use(
     secret: process.env.SESSION_SECRET || "supersecret",
     resave: false,
     saveUninitialized: false,
+    name: "connect.sid",
     store: MongoStore.create({
       mongoUrl: process.env.MONGO_URI,
       ttl: 7 * 24 * 60 * 60, // 7 days
@@ -56,6 +57,7 @@ app.use(
       sameSite: "none", // required for cross-origin (Vercel <-> Railway)
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
+    proxy: true, // needed for secure cookies on platforms like Railway
   })
 );
 
