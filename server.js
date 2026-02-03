@@ -29,7 +29,7 @@ app.use(express.json());
 const allowedOrigins = [
   "http://localhost:5173",
   "https://notes-app-frontend-five-rho.vercel.app",
-  "https:/agakayi.xyz"
+  "https://agakayi.xyz"
 ];
 
 app.use(cors({
