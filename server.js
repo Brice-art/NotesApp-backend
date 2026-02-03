@@ -28,7 +28,8 @@ app.use(express.json());
 // CORS - simpler now since we don't need credentials for cookies
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://notes-app-frontend-five-rho.vercel.app"
+  "https://notes-app-frontend-five-rho.vercel.app",
+  "https:/agakayi.xyz"
 ];
 
 app.use(cors({
