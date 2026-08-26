@@ -20,7 +20,9 @@ const connectDB = async () => {
   }
 };
 
-connectDB();
+if (process.env.NODE_ENV !== "test") {
+  connectDB();
+}
 
 // Middleware
 app.use(express.json());
@@ -298,6 +300,15 @@ app.patch("/notes/:noteId/archive", requireAuth, async (req, res) => {
   }
 });
 
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
+
 // Get categories
 app.get("/categories", requireAuth, async (req, res) => {
   try {
@@ -312,10 +323,4 @@ app.get("/categories", requireAuth, async (req, res) => {
 // Root route
 app.get("/", (req, res) => {
   res.json({ message: "NotesApp API with JWT" });
-});
-
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
 });
