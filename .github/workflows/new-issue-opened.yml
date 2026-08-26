@@ -109,7 +109,7 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT != '' && secrets.SMTP_PORT || 587 }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: New issue opened: ${{ github.event.issue.title }}
+          subject: "New issue opened: ${{ github.event.issue.title }}"
           to: ${{ secrets.MAINTAINER_EMAIL }}
           from: GitHub Actions <${{ secrets.SMTP_USERNAME }}>
           body: |
