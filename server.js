@@ -6,17 +6,25 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const Note = require("./models/Note");
+const dns = require("dns");
 
 const app = express();
 
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 // MongoDB Connection
+const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/notesapp";
+
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(mongoUri);
     console.log("MongoDB connected");
   } catch (err) {
     console.error("MongoDB connection failed:", err.message);
-    process.exit(1);
+    if (process.env.NODE_ENV === "production") {
+      process.exit(1);
+    }
+    console.warn("Continuing in development mode without a live MongoDB connection. Set MONGO_URI to a reachable database to enable persistence.");
   }
 };
 
@@ -153,9 +161,9 @@ app.post("/auth/logout", (req, res) => {
 // Get all notes
 app.get("/notes", requireAuth, async (req, res) => {
   try {
-    const { search, category, isArchived = "false" } = req.query;
+    const { search, category, isArchived = "false", tag, sortBy = "createdAt", sortOrder = "desc" } = req.query;
     
-    let query = { user: req.userId, isArchived: isArchived === "true" };
+    let query = { user: req.userId, isArchived: isArchived === "true", isDeleted: false };
     
     if (search) {
       query.$or = [
@@ -167,8 +175,25 @@ app.get("/notes", requireAuth, async (req, res) => {
     if (category) {
       query.category = category;
     }
-    
-    const notes = await Note.find(query).sort({ isPinned: -1, createdAt: -1 });
+
+    if (tag) {
+      query.tags = { $in: [String(tag).trim().toLowerCase()] };
+    }
+
+    const sortOptions = {};
+
+    if (sortBy === "dueDate") {
+      sortOptions.dueDate = sortOrder === "asc" ? 1 : -1;
+    } else if (sortBy === "updatedAt") {
+      sortOptions.updatedAt = sortOrder === "asc" ? 1 : -1;
+    } else if (sortBy === "title") {
+      sortOptions.title = sortOrder === "asc" ? 1 : -1;
+    } else {
+      sortOptions.isPinned = -1;
+      sortOptions.createdAt = -1;
+    }
+
+    const notes = await Note.find(query).sort(sortOptions);
     res.json({ notes });
   } catch (error) {
     console.error('Get notes error:', error);
@@ -179,14 +204,20 @@ app.get("/notes", requireAuth, async (req, res) => {
 // Create note
 app.post("/notes", requireAuth, async (req, res) => {
   try {
-    const { title, content = "", color = "#ffffff", category = "General" } = req.body;
+    const { title, content = "", color = "#ffffff", category = "General", dueDate, tags = [] } = req.body;
+    const normalizedDueDate = dueDate && dueDate !== "" ? new Date(dueDate) : null;
+    const normalizedTags = Array.isArray(tags)
+      ? tags.map((tag) => String(tag).trim()).filter(Boolean).map((tag) => tag.toLowerCase())
+      : [];
     
     const note = await Note.create({ 
       user: req.userId, 
       title, 
       content, 
       color, 
-      category 
+      category,
+      dueDate: normalizedDueDate,
+      tags: normalizedTags
     });
     
     res.status(201).json({
@@ -203,7 +234,7 @@ app.post("/notes", requireAuth, async (req, res) => {
 app.put("/notes/:noteId", requireAuth, async (req, res) => {
   try {
     const { noteId } = req.params;
-    const { title, content, color, category, isPinned, isFavorite, isArchived } = req.body;
+    const { title, content, color, category, isPinned, isFavorite, isArchived, dueDate, tags } = req.body;
     
     const updateData = {};
     if (title !== undefined) updateData.title = title;
@@ -215,6 +246,14 @@ app.put("/notes/:noteId", requireAuth, async (req, res) => {
     if (isArchived !== undefined) {
       updateData.isArchived = isArchived;
       if (isArchived) updateData.isPinned = false;
+    }
+    if (dueDate !== undefined) {
+      updateData.dueDate = dueDate && dueDate !== "" ? new Date(dueDate) : null;
+    }
+    if (tags !== undefined) {
+      updateData.tags = Array.isArray(tags)
+        ? tags.map((tag) => String(tag).trim()).filter(Boolean).map((tag) => tag.toLowerCase())
+        : [];
     }
     
     const note = await Note.findOneAndUpdate(
@@ -234,21 +273,45 @@ app.put("/notes/:noteId", requireAuth, async (req, res) => {
   }
 });
 
-// Delete note
+// Soft delete note (moves to trash)
 app.delete("/notes/:noteId", requireAuth, async (req, res) => {
   try {
     const { noteId } = req.params;
-    
-    const result = await Note.deleteOne({ _id: noteId, user: req.userId });
-    
-    if (result.deletedCount === 0) {
+    const note = await Note.findOne({ _id: noteId, user: req.userId });
+
+    if (!note) {
       return res.status(404).json({ error: "Note not found" });
     }
-    
-    res.json({ message: "Note deleted successfully" });
+
+    note.isDeleted = true;
+    note.deletedAt = new Date();
+    await note.save();
+
+    res.json({ message: "Note moved to trash successfully", note });
   } catch (error) {
     console.error('Delete note error:', error);
     res.status(500).json({ error: "Failed to delete note" });
+  }
+});
+
+// Restore deleted note
+app.patch("/notes/:noteId/restore", requireAuth, async (req, res) => {
+  try {
+    const { noteId } = req.params;
+    const note = await Note.findOne({ _id: noteId, user: req.userId });
+
+    if (!note) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    note.isDeleted = false;
+    note.deletedAt = null;
+    await note.save();
+
+    res.json({ message: "Note restored successfully", note });
+  } catch (error) {
+    console.error('Restore note error:', error);
+    res.status(500).json({ error: "Failed to restore note" });
   }
 });
 
@@ -312,7 +375,7 @@ module.exports = app;
 // Get categories
 app.get("/categories", requireAuth, async (req, res) => {
   try {
-    const categories = await Note.distinct("category", { user: req.userId });
+    const categories = await Note.distinct("category", { user: req.userId, isDeleted: false });
     res.json({ categories });
   } catch (error) {
     console.error('Get categories error:', error);

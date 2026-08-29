@@ -44,6 +44,8 @@ describe('Notes routes', () => {
       content: 'Paris',
       color: '#ffffff',
       category: 'General',
+      tags: ['work', 'trip'],
+      dueDate: '2026-09-15T12:00:00.000Z',
     };
 
     Note.create.mockResolvedValue(mockNote);
@@ -54,6 +56,8 @@ describe('Notes routes', () => {
       .send({
         title: 'Travel plan',
         content: 'Paris',
+        tags: ['work', 'trip'],
+        dueDate: '2026-09-15T12:00:00.000Z',
       });
 
     expect(res.statusCode).toBe(201);
@@ -63,8 +67,11 @@ describe('Notes routes', () => {
       content: 'Paris',
       color: '#ffffff',
       category: 'General',
+      tags: ['work', 'trip'],
+      dueDate: new Date('2026-09-15T12:00:00.000Z'),
     });
     expect(res.body.note.title).toBe('Travel plan');
+    expect(res.body.note.dueDate).toBe('2026-09-15T12:00:00.000Z');
   });
 
   test('PUT /notes/:noteId updates a note', async () => {
@@ -73,6 +80,7 @@ describe('Notes routes', () => {
       user: 'user-123',
       title: 'Updated title',
       content: 'New content',
+      dueDate: '2026-09-20T08:30:00.000Z',
     };
 
     Note.findOneAndUpdate.mockResolvedValue(updatedNote);
@@ -80,26 +88,67 @@ describe('Notes routes', () => {
     const res = await request(app)
       .put('/notes/n1')
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'Updated title', content: 'New content' });
+      .send({ title: 'Updated title', content: 'New content', dueDate: '2026-09-20T08:30:00.000Z' });
 
     expect(res.statusCode).toBe(200);
     expect(Note.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: 'n1', user: 'user-123' },
-      { title: 'Updated title', content: 'New content' },
+      { title: 'Updated title', content: 'New content', dueDate: new Date('2026-09-20T08:30:00.000Z') },
       { new: true }
     );
     expect(res.body.note.title).toBe('Updated title');
+    expect(res.body.note.dueDate).toBe('2026-09-20T08:30:00.000Z');
   });
 
-  test('DELETE /notes/:noteId deletes a note', async () => {
-    Note.deleteOne.mockResolvedValue({ deletedCount: 1 });
+  test('DELETE /notes/:noteId soft deletes a note and restore works', async () => {
+    Note.findOne.mockResolvedValueOnce({
+      _id: 'n1',
+      user: 'user-123',
+      isDeleted: false,
+      deletedAt: null,
+      save: jest.fn().mockResolvedValue(true),
+    });
 
-    const res = await request(app)
+    const deleteRes = await request(app)
       .delete('/notes/n1')
       .set('Authorization', `Bearer ${token}`);
 
+    expect(deleteRes.statusCode).toBe(200);
+    expect(deleteRes.body.message).toBe('Note moved to trash successfully');
+
+    Note.findOne.mockResolvedValueOnce({
+      _id: 'n1',
+      user: 'user-123',
+      isDeleted: true,
+      deletedAt: new Date(),
+      save: jest.fn().mockResolvedValue(true),
+    });
+
+    const restoreRes = await request(app)
+      .patch('/notes/n1/restore')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(restoreRes.statusCode).toBe(200);
+    expect(restoreRes.body.message).toBe('Note restored successfully');
+  });
+
+  test('GET /notes filters by tag and sorts by dueDate', async () => {
+    const sortedNotes = [{ _id: 'n1', title: 'Early task', dueDate: '2026-09-12T00:00:00.000Z' }];
+    Note.find.mockReturnValue({
+      sort: jest.fn().mockResolvedValue(sortedNotes),
+    });
+
+    const res = await request(app)
+      .get('/notes?tag=work&sortBy=dueDate&sortOrder=asc')
+      .set('Authorization', `Bearer ${token}`);
+
     expect(res.statusCode).toBe(200);
-    expect(res.body.message).toBe('Note deleted successfully');
+    expect(Note.find).toHaveBeenCalledWith(expect.objectContaining({
+      user: 'user-123',
+      tags: { $in: ['work'] },
+      isDeleted: false,
+    }));
+    expect(res.body.notes[0].title).toBe('Early task');
   });
 
   test('PATCH /notes/:noteId/pin toggles note pin state', async () => {

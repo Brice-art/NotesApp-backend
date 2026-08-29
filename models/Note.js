@@ -32,6 +32,23 @@ const NoteSchema = new mongoose.Schema({
     type: Boolean, 
     default: false 
   },
+  dueDate: {
+    type: Date,
+    default: null
+  },
+  tags: [{
+    type: String,
+    trim: true,
+    lowercase: true
+  }],
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
   user: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "User", 
@@ -44,5 +61,6 @@ const NoteSchema = new mongoose.Schema({
 // Index for better query performance
 NoteSchema.index({ user: 1, createdAt: -1 });
 NoteSchema.index({ user: 1, isPinned: -1 });
+NoteSchema.index({ user: 1, isDeleted: 1, dueDate: 1 });
 
 module.exports = mongoose.model("Note", NoteSchema);
