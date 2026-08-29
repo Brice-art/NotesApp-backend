@@ -6,11 +6,11 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const Note = require("./models/Note");
-const dns = require("dns");
+// const dns = require("dns");
 
 const app = express();
 
-dns.setServers(["1.1.1.1", "8.8.8.8"]);
+// dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
 // MongoDB Connection
 const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/notesapp";
