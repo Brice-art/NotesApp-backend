@@ -1,14 +1,29 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "homepage": "https://github.com/Brice-art/NotesApp-backend#readme",
+  "bugs": {
+    "url": "https://github.com/Brice-art/NotesApp-backend/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Brice-art/NotesApp-backend.git"
+  },
+  "license": "ISC",
+  "author": "LMW",
+  "type": "commonjs",
   "main": "server.js",
+  "directories": {
+    "test": "tests"
+  },
   "scripts": {
     "test": "jest --runInBand",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "node -e \"console.log('Backend build step: no transpile required for this Node.js app.')\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
@@ -23,7 +38,6 @@
     "mongoose": "^8.14.3",
     "nodemon": "^3.1.10"
   },
-  "description": "",
   "devDependencies": {
     "jest": "^30.4.2",
     "supertest": "^7.2.2"
