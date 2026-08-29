@@ -162,22 +162,34 @@ app.post("/auth/logout", (req, res) => {
 app.get("/notes", requireAuth, async (req, res) => {
   try {
     const { search, category, isArchived = "false", tag, sortBy = "createdAt", sortOrder = "desc" } = req.query;
-    
-    let query = { user: req.userId, isArchived: isArchived === "true", isDeleted: false };
-    
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } }
-      ];
+
+    const conditions = [
+      { $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }] }
+    ];
+
+    if (isArchived === "true") {
+      conditions.push({ isArchived: true });
+    } else {
+      conditions.push({ $or: [{ isArchived: false }, { isArchived: { $exists: false } }] });
     }
-    
+
+    const query = { user: req.userId, $and: conditions };
+
+    if (search) {
+      query.$and.push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { content: { $regex: search, $options: 'i' } }
+        ]
+      });
+    }
+
     if (category) {
-      query.category = category;
+      query.$and.push({ category });
     }
 
     if (tag) {
-      query.tags = { $in: [String(tag).trim().toLowerCase()] };
+      query.$and.push({ tags: { $in: [String(tag).trim().toLowerCase()] } });
     }
 
     const sortOptions = {};
