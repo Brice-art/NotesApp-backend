@@ -145,10 +145,34 @@ describe('Notes routes', () => {
     expect(res.statusCode).toBe(200);
     expect(Note.find).toHaveBeenCalledWith(expect.objectContaining({
       user: 'user-123',
-      tags: { $in: ['work'] },
-      isDeleted: false,
+      $and: expect.arrayContaining([
+        { $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }] },
+        { $or: [{ isArchived: false }, { isArchived: { $exists: false } }] },
+        { tags: { $in: ['work'] } }
+      ])
     }));
     expect(res.body.notes[0].title).toBe('Early task');
+  });
+
+  test('GET /notes includes legacy notes that do not have isDeleted or isArchived fields', async () => {
+    const legacyNotes = [{ _id: 'n2', title: 'Legacy note' }];
+    Note.find.mockReturnValue({
+      sort: jest.fn().mockResolvedValue(legacyNotes),
+    });
+
+    const res = await request(app)
+      .get('/notes')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(Note.find).toHaveBeenCalledWith(expect.objectContaining({
+      user: 'user-123',
+      $and: expect.arrayContaining([
+        { $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }] },
+        { $or: [{ isArchived: false }, { isArchived: { $exists: false } }] }
+      ])
+    }));
+    expect(res.body.notes[0].title).toBe('Legacy note');
   });
 
   test('PATCH /notes/:noteId/pin toggles note pin state', async () => {
